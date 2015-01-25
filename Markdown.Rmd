@@ -1,0 +1,106 @@
+---
+title: "Practical ML"
+author: "Igor Stojanov"
+date: "Sunday, January 25, 2015"
+output: html_document
+---
+
+Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+Goal
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+
+Load needed libraries.
+```{r}
+library(caret)
+library(randomForest)
+library(doParallel)
+```
+
+Make cluster for parallel computations
+```{r}
+cl<-makeCluster(detectCores())
+registerDoParallel(cl)
+```
+
+Read CVS file and creating training dataset.
+```{r}
+trainBulk <- read.csv("~/pml-training.csv",na.strings=c("NA",""))
+dim(trainBulk)
+```
+
+
+Read CVS file and creating testing dataset.
+```{r}
+testBulk <- read.csv("~/pml-testing.csv",na.strings=c("NA",""))
+```
+
+Removing NA and obtaining clean training and testing datasets.
+```{r}
+NAs <- apply(trainBulk,2,function(x) {sum(is.na(x))}) 
+cleanTrain <- trainBulk[,which(NAs == 0)]
+cleanTest <- testBulk[,which(NAs == 0)]
+```
+
+Splitting training set into 70 % training set and 30 % cross validation set.
+```{r}
+trainIndex <- createDataPartition(y = cleanTrain$classe, p=0.7,list=FALSE)
+trainSet <- cleanTrain[trainIndex,]
+crossValidationSet <- cleanTrain[-trainIndex,]
+```
+
+Removing not needed variables.
+```{r}
+removeIndex <- as.integer(c(1,2,3,4,5,6))
+trainSet <- trainSet[,-removeIndex]
+testSet <- cleanTest[,-removeIndex]
+```
+
+Training using cross validation.
+```{r}
+mytrControl = trainControl(method = "cv", number = 4)
+modelFit <- train(trainSet$classe ~.,data = trainSet, method="rf", trControl = mytrControl)
+modelFit
+```
+
+Obtaing Cross-Validation accuracy.
+```{r}
+plot(modelFit)
+```
+
+Testing on Cross-Validation set
+```{r}
+predicted <- predict(modelFit, crossValidationSet)
+```
+
+Sampling error.
+```{r}
+SampleError <- sum(predicted == crossValidationSet$classe)/nrow(crossValidationSet)
+SampleError
+```
+
+Testing on testSet.
+```{r}
+answers <-predict(modelFit, testSet)
+```
+
+Writing answer using provided fucntion.
+```{r}
+pml_write_files = function(answers){
+  n = length(answers)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(answers[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+```
+
+Write to files. 
+```{r}
+pml_write_files(answers)
+```
+
